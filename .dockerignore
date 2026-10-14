@@ -1,0 +1,54 @@
+# Controle de versão
+.git/
+.gitignore
+.gitattributes
+
+# Ambientes virtuais e caches Python
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# Segredos: nunca entram na imagem (use --env-file em runtime)
+.env
+.env.*
+!.env.example
+
+# Fora do escopo de runtime
+tests/
+notebooks/
+docs/
+configs/
+models/
+data/
+.dvc/
+*.dvc
+dvc.yaml
+dvc.lock
+
+# MLflow local
+mlruns/
+mlartifacts/
+mlflow.db
+
+# Documentação (a imagem não precisa)
+*.md
+
+# IDEs e SO
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+*.log
+.ipynb_checkpoints/
+
+# Docker
+Dockerfile
+.dockerignore
