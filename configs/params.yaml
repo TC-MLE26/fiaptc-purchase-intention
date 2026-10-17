@@ -1,0 +1,23 @@
+# Pipeline parameters for reproducibility
+seed: 42
+
+prepare:
+  raw_data_path: "data/raw/online_shoppers_intention.csv"
+  processed_dir: "data/processed"
+  test_size: 0.2
+  target_col: "Revenue"
+
+train:
+  processed_dir: "data/processed"
+  model_dir: "models"
+  model_name: "purchase-intention-classifier"
+  model_alias: "champion"
+  experiment_name: "purchase-intention-challenge"
+  n_estimators: 150
+  max_depth: 8
+  min_samples_split: 5
+
+evaluate:
+  test_data_path: "data/processed/test.csv"
+  model_path: "models/model.pkl"
+  metrics_path: "reports/metrics.json"

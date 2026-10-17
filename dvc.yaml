@@ -1,0 +1,49 @@
+stages:
+  prepare:
+    cmd: python -m src.pipeline.data_preparation
+    deps:
+      - data/raw/online_shoppers_intention.csv
+      - src/pipeline/data_preparation.py
+    params:
+      - configs/params.yaml:
+          - seed
+          - prepare
+    outs:
+      - data/processed/train.csv
+      - data/processed/test.csv
+
+  train:
+    cmd: python -m src.pipeline.train
+    deps:
+      - data/processed/train.csv
+      - src/pipeline/train.py
+      - src/pipeline/model_pipeline.py
+    params:
+      - configs/params.yaml:
+          - seed
+          - train
+    outs:
+      - models/model.pkl
+
+  evaluate:
+    cmd: python -m src.pipeline.evaluate
+    deps:
+      - data/processed/test.csv
+      - models/model.pkl
+      - src/pipeline/evaluate.py
+    params:
+      - configs/params.yaml:
+          - evaluate
+    metrics:
+      - reports/metrics.json:
+          cache: false
+
+  register:
+    cmd: python -m src.pipeline.register
+    deps:
+      - models/model.pkl
+      - src/pipeline/register.py
+    params:
+      - configs/params.yaml:
+          - train.model_name
+          - train.model_alias

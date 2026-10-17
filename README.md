@@ -173,21 +173,61 @@ poetry run ruff format --check .
 
 ---
 
-## EDA
+## Pipeline de Dados e DVC
 
-A definir pelo grupo.
+O ciclo de vida dos dados e artefatos de modelo é orquestrado e versionado via [DVC](https://dvc.org/), garantindo reprodutibilidade ponta a ponta e separação rígida entre código (Git) e dados/binários (DVC).
 
-## Pipeline de dados (DVC)
+- O dataset bruto reside em `data/raw/online_shoppers_intention.csv` e é versionado pelo ponteiro `data/raw/online_shoppers_intention.csv.dvc`.
+- O arquivo de orquestração `dvc.yaml` define quatro estágios interdependentes:
+  1. **`prepare`**: Executa `src.pipeline.data_preparation`, realizando o split estratificado (seed `42`, 80% treino / 20% teste) e salvando `data/processed/train.csv` e `test.csv`.
+  2. **`train`**: Executa `src.pipeline.train`, ajustando o pipeline Scikit-Learn com pré-processamento e Random Forest (`class_weight='balanced'`), gerando o artefato `models/model.pkl` e registrando parâmetros e modelo no MLflow.
+  3. **`evaluate`**: Executa `src.pipeline.evaluate`, calculando acurácia, precisão, recall, F1-Score e ROC-AUC sobre a partição de teste e gravando em `reports/metrics.json`.
+  4. **`register`**: Executa `src.pipeline.register`, promovendo a versão do modelo treinado no MLflow Model Registry sob o alias `champion`.
 
-A definir pelo grupo.
+Comandos do DVC:
+
+```bash
+# Executar ou reproduzir o pipeline completo
+dvc repro
+
+# Visualizar as métricas obtidas no terminal
+dvc metrics show
+```
+
+---
 
 ## Treinamento e MLflow Tracking
 
-A definir pelo grupo.
+O treinamento utiliza o `scikit-learn` encapsulado em um `sklearn.pipeline.Pipeline` completo (com `StandardScaler` para variáveis contínuas e `OneHotEncoder` para variáveis categóricas).
+
+Para inicializar a interface do MLflow localmente:
+
+```bash
+mlflow ui --port 5000
+```
+
+Ao executar o pipeline (`dvc repro` ou `python -m src.pipeline.train`), os experimentos são logados no experimento `purchase-intention-challenge`:
+- **Parâmetros logados:** `n_estimators`, `max_depth`, `min_samples_split`, `seed`.
+- **Métricas avaliadas (`reports/metrics.json`):**
+  - **ROC-AUC:** ~0.92
+  - **Recall:** ~81.4%
+  - **Acurácia:** ~85.8%
+  - **F1-Score:** ~0.64
+- **Model Registry:** O modelo aprovado recebe a tag `@champion`, permitindo que a API de inferência o carregue dinamicamente na inicialização.
+
+---
 
 ## Model Card
 
-A definir pelo grupo.
+| Item | Especificação |
+| --- | --- |
+| **Nome do Modelo** | `purchase-intention-classifier` |
+| **Tipo de Modelo** | Random Forest Classifier com pré-processamento acoplado (`ColumnTransformer`) |
+| **Objetivo** | Previsão em tempo real da probabilidade de compra (`Revenue=True`) de uma sessão de e-commerce. |
+| **Entradas** | 17 variáveis de sessão (páginas visitadas, duração, taxas de rejeição/saída, PageValues, mês, SO, navegador, região, tipo de tráfego, tipo de visitante e fim de semana). |
+| **Saída** | `purchase_probability` (0.0 a 1.0) e `purchase_prediction` (True/False dado o threshold 0.5). |
+| **Tratamento de Desbalanceamento** | `class_weight='balanced'` aplicado para priorizar recall da classe minoritária compradora (~15.5% da base). |
+| **Limitações** | Desempenho condicionado à integridade dos eventos de navegação; novos valores em variáveis categóricas são ignorados de forma segura (`handle_unknown='ignore'`). |
 
 ## Docker
 

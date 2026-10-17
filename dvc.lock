@@ -1,0 +1,103 @@
+schema: '2.0'
+stages:
+  prepare:
+    cmd: python -m src.pipeline.data_preparation
+    deps:
+    - path: data/raw/online_shoppers_intention.csv
+      hash: md5
+      md5: cc6ec1db03b4f10f8de52c56ff48b085
+      size: 1072063
+    - path: src/pipeline/data_preparation.py
+      hash: md5
+      md5: eceaac4b95934c529c16b59f2ba7dd8d
+      size: 3135
+    params:
+      configs/params.yaml:
+        prepare:
+          raw_data_path: data/raw/online_shoppers_intention.csv
+          processed_dir: data/processed
+          test_size: 0.2
+          target_col: Revenue
+        seed: 42
+    outs:
+    - path: data/processed/test.csv
+      hash: md5
+      md5: 859bfc849b9b5f9a7dc98b9b5891c6bf
+      size: 234115
+    - path: data/processed/train.csv
+      hash: md5
+      md5: 251c8b8fe8b11f97efbf7d7137083cf7
+      size: 935403
+  train:
+    cmd: python -m src.pipeline.train
+    deps:
+    - path: data/processed/train.csv
+      hash: md5
+      md5: 251c8b8fe8b11f97efbf7d7137083cf7
+      size: 935403
+    - path: src/pipeline/model_pipeline.py
+      hash: md5
+      md5: 0eaa3a2531bc7a74ca0932cee4dc040b
+      size: 2510
+    - path: src/pipeline/train.py
+      hash: md5
+      md5: 9b4365e745287f6fdd38ea73b41928dc
+      size: 4539
+    params:
+      configs/params.yaml:
+        seed: 42
+        train:
+          processed_dir: data/processed
+          model_dir: models
+          model_name: purchase-intention-classifier
+          model_alias: champion
+          experiment_name: purchase-intention-challenge
+          n_estimators: 150
+          max_depth: 8
+          min_samples_split: 5
+    outs:
+    - path: models/model.pkl
+      hash: md5
+      md5: 4c92a74edfbf4bb0ee8fb771bdb0287b
+      size: 3034340
+  evaluate:
+    cmd: python -m src.pipeline.evaluate
+    deps:
+    - path: data/processed/test.csv
+      hash: md5
+      md5: 859bfc849b9b5f9a7dc98b9b5891c6bf
+      size: 234115
+    - path: models/model.pkl
+      hash: md5
+      md5: 4c92a74edfbf4bb0ee8fb771bdb0287b
+      size: 3034340
+    - path: src/pipeline/evaluate.py
+      hash: md5
+      md5: a4dde4e3b4028258e2e22fca4b1a81d4
+      size: 4668
+    params:
+      configs/params.yaml:
+        evaluate:
+          test_data_path: data/processed/test.csv
+          model_path: models/model.pkl
+          metrics_path: reports/metrics.json
+    outs:
+    - path: reports/metrics.json
+      hash: md5
+      md5: 41ac241852d8c4e133aba29056f53abb
+      size: 170
+  register:
+    cmd: python -m src.pipeline.register
+    deps:
+    - path: models/model.pkl
+      hash: md5
+      md5: 4c92a74edfbf4bb0ee8fb771bdb0287b
+      size: 3034340
+    - path: src/pipeline/register.py
+      hash: md5
+      md5: d29dc818ee5874e0ac3613f18d0fa013
+      size: 3753
+    params:
+      configs/params.yaml:
+        train.model_alias: champion
+        train.model_name: purchase-intention-classifier
