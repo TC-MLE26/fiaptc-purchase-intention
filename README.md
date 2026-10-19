@@ -1,26 +1,20 @@
 # fiaptc-purchase-intention
 
-Tech Challenge da Fase 2 da pós-graduação em ML Engineering (FIAP). O projeto prevê a
-propensão de compra de um usuário de e-commerce a partir do comportamento de navegação,
-para que o time de negócio consiga priorizar ações (ofertas, remarketing) durante a
-sessão, e não só depois dela.
+Tech Challenge da Fase 2 da pós-graduação em ML Engineering (FIAP). O projeto prevê a propensão de compra de um usuário de e-commerce a partir do comportamento de navegação, para que o time de negócio consiga priorizar ações (ofertas, remarketing) durante a sessão, e não só depois dela.
 
-É um problema de classificação binária com dados tabulares, onde cada linha representa
-uma sessão de navegação. O dataset é o
-[Online Shoppers Purchasing Intention](https://archive.ics.uci.edu/dataset/468/online+shoppers+purchasing+intention+dataset)
-(UCI), com 17 features e o alvo `Revenue`. A fonte dos dados é a versão do UCI. Este repositório cobre a análise exploratória,
-o pipeline de dados e treinamento, o rastreamento de experimentos e a API de inferência,
-que consome o modelo promovido no MLflow Model Registry.
+É um problema de classificação binária com dados tabulares, onde cada linha representa uma sessão de navegação. O dataset é o [Online Shoppers Purchasing Intention](https://archive.ics.uci.edu/dataset/468/online+shoppers+purchasing+intention+dataset) (UCI), com 17 features e o alvo `Revenue`. 
+
+Este repositório cobre a análise exploratória, o pipeline de dados (via DVC), o treinamento e rastreamento (via MLflow) e a API de inferência (FastAPI).
 
 ---
 
 ## Estrutura do Repositório
 
-```
+```text
 configs/           configurações do pipeline
-data/              dados brutos e processados
+data/              dados brutos (raw) e processados (processed)
 docs/              documentação e Model Card
-models/            artefatos de modelo
+models/            artefatos de modelo locais
 notebooks/         EDA e experimentação
 src/api/routes/    rotas da API (/health e /predict)
 src/core/          configurações, CORS, logging e lifespan
@@ -32,15 +26,15 @@ main.py            ponto de entrada da aplicação
 
 ---
 
-## Setup
+# Setup
 
 O projeto usa Python 3.12 e [Poetry](https://python-poetry.org/) para gerenciar o
 ambiente e as dependências (produção e desenvolvimento separadas):
 
+# 1. Instalação de dependências:
 ```bash
 poetry install
 ```
-
 As versões ficam fixadas no `pyproject.toml` e no `poetry.lock`, que são a única fonte
 de dependências do projeto. Para instalar só as dependências de produção:
 `poetry install --only main`.
@@ -67,7 +61,50 @@ cp .env.example .env
 
 ---
 
+## Pipeline de Dados e DVC
+
+O ciclo de vida dos dados e artefatos de modelo é orquestrado e versionado via [DVC](https://dvc.org/), garantindo reprodutibilidade ponta a ponta e separação rígida entre código (Git) e dados/binários (DVC).
+
+# 1. Download dos Dados Brutos:
+Baixe o dataset *online_shoppers_intention.csv* diretamente do *UCI Repository* e coloque-o na pasta: **data/raw/online_shoppers_intention.csv.**
+
+# 2. Execução do Pipeline:
+Para rodar os estágios de preparação, treino, avaliação e registro:
+
+```bash
+poetry run dvc repro
+```
+# 3. Visualização de Métricas:
+
+```bash
+poetry run dvc metrics show
+Métricas atuais: ROC-AUC ~0.92, Recall ~81.4%, Acurácia ~85.8%.
+```
+### Treinamento e MLflow Tracking
+O treinamento utiliza o `scikit-learn` encapsulado em um `sklearn.pipeline.Pipeline` completo (com `StandardScaler` para variáveis contínuas e `OneHotEncoder` para variáveis categóricas).
+
+Para visualizar os experimentos, inicie a interface do MLflow em um terminal separado:
+
+```bash
+poetry run mlflow ui --port 5000
+```
+
+Acesse *http://localhost:5000.* O modelo aprovado recebe a tag `@champion` no Model Registry.
+
+Ao executar o pipeline (`dvc repro` ou `python -m src.pipeline.train`), os experimentos são logados no experimento `purchase-intention-challenge`:
+- **Parâmetros logados:** `n_estimators`, `max_depth`, `min_samples_split`, `seed`.
+- **Métricas avaliadas (`reports/metrics.json`):**
+  - **ROC-AUC:** ~0.92
+  - **Recall:** ~81.4%
+  - **Acurácia:** ~85.8%
+  - **F1-Score:** ~0.64
+- **Model Registry:** O modelo aprovado recebe a tag `@champion`, permitindo que a API de inferência o carregue dinamicamente na inicialização.
+
+---
+
 ## API
+
+A API carrega o modelo do MLflow na inicialização. Para subir o servidor localmente.
 
 O código fica em `src/api` (rotas), `src/core` (configuração, CORS, logging e lifespan),
 `src/inference` (carga do modelo e predição) e `src/schemas` (contratos). Para subir
@@ -77,13 +114,14 @@ localmente:
 poetry run python main.py
 ```
 
-A documentação interativa fica em `/docs` (Swagger) e `/redoc`.
+A documentação interativa fica em `/docs` (Swagger) e `/redoc` *http://localhost:8075/docs.*
 
 **Endpoints:**
 
 - `GET /health` — status da API e `model_loaded`, que indica se o modelo está carregado.
-- `POST /predict` — recebe as 17 features de uma sessão e retorna a probabilidade de
-  compra e a decisão pelo threshold.
+- `POST /predict` — recebe as 17 features de uma sessão e retorna (`purchase_probability` e `purchase_prediction`) a probabilidade de compra e a decisão pelo `threshold`.
+
+Exemplo de chamada (`/predict`):
 
 ```bash
 curl -X POST http://localhost:8075/predict \
@@ -136,6 +174,24 @@ depois da API.
 
 ---
 
+## Solução de Problemas Comuns
+1. Erro `503 Service Unavailable` no `/predict`
+**Sintoma:** A API responde com erro dizendo que o modelo está indisponível.
+**Solução:** O MLflow provavelmente não estava rodando durante a etapa de registro do modelo. 
+Inicie o MLflow (`poetry run mlflow ui --port 5000`) e rode novamente o pipeline (`poetry run dvc repro`) ou apenas a etapa de registro (`poetry run python -m src.pipeline.register`).
+
+2. Erro `No remote provided and no default remote set` ao rodar `dvc pull`
+**Sintoma:** O DVC não consegue baixar os dados processados.
+**Solução:** O projeto usa DVC local. Baixe o CSV bruto da UCI, coloque em data/raw/ e rode poetry run dvc repro para que o DVC construa os artefatos localmente.
+
+3. A API sobe mas o `/health` retorna `"model_loaded": false`
+**Sintoma:** A API está no ar, mas sem o modelo.
+**Solução:** Isso ocorre se o MLflow estiver desligado. A API tem um mecanismo de retry a cada 10 segundos. Ligue o MLflow e faça uma chamada no `/predict` (ou aguarde) para que ela carregue o modelo.
+
+4. Erro de versão do Python ao rodar `poetry install`
+Sintoma: O Poetry diz que a versão do Python não é permitida.
+Solução: O projeto exige Python 3.12. Instale-o e rode `poetry env use 3.12` antes de instalar as dependências.
+
 ## Modelo no MLflow Model Registry
 
 A API resolve a versão apontada por `{MODEL_NAME}@{MODEL_ALIAS}` (por padrão
@@ -157,12 +213,15 @@ respeitar ao registrar o modelo:
 
 ## Testes
 
+**Testes (não dependem do MLflow rodando):**
+
 Os testes usam `pytest` e o `TestClient` do FastAPI e não dependem de MLflow rodando nem
 de modelo treinado: o modelo é substituído por um estimador falso.
 
 ```bash
 poetry run pytest
 ```
+Formatação de código:
 
 ## Lint
 
@@ -173,61 +232,17 @@ poetry run ruff format --check .
 
 ---
 
-## Pipeline de Dados e DVC
-
-O ciclo de vida dos dados e artefatos de modelo é orquestrado e versionado via [DVC](https://dvc.org/), garantindo reprodutibilidade ponta a ponta e separação rígida entre código (Git) e dados/binários (DVC).
-
-- O dataset bruto reside em `data/raw/online_shoppers_intention.csv` e é versionado pelo ponteiro `data/raw/online_shoppers_intention.csv.dvc`.
-- O arquivo de orquestração `dvc.yaml` define quatro estágios interdependentes:
-  1. **`prepare`**: Executa `src.pipeline.data_preparation`, realizando o split estratificado (seed `42`, 80% treino / 20% teste) e salvando `data/processed/train.csv` e `test.csv`.
-  2. **`train`**: Executa `src.pipeline.train`, ajustando o pipeline Scikit-Learn com pré-processamento e Random Forest (`class_weight='balanced'`), gerando o artefato `models/model.pkl` e registrando parâmetros e modelo no MLflow.
-  3. **`evaluate`**: Executa `src.pipeline.evaluate`, calculando acurácia, precisão, recall, F1-Score e ROC-AUC sobre a partição de teste e gravando em `reports/metrics.json`.
-  4. **`register`**: Executa `src.pipeline.register`, promovendo a versão do modelo treinado no MLflow Model Registry sob o alias `champion`.
-
-Comandos do DVC:
-
-```bash
-# Executar ou reproduzir o pipeline completo
-dvc repro
-
-# Visualizar as métricas obtidas no terminal
-dvc metrics show
-```
-
----
-
-## Treinamento e MLflow Tracking
-
-O treinamento utiliza o `scikit-learn` encapsulado em um `sklearn.pipeline.Pipeline` completo (com `StandardScaler` para variáveis contínuas e `OneHotEncoder` para variáveis categóricas).
-
-Para inicializar a interface do MLflow localmente:
-
-```bash
-mlflow ui --port 5000
-```
-
-Ao executar o pipeline (`dvc repro` ou `python -m src.pipeline.train`), os experimentos são logados no experimento `purchase-intention-challenge`:
-- **Parâmetros logados:** `n_estimators`, `max_depth`, `min_samples_split`, `seed`.
-- **Métricas avaliadas (`reports/metrics.json`):**
-  - **ROC-AUC:** ~0.92
-  - **Recall:** ~81.4%
-  - **Acurácia:** ~85.8%
-  - **F1-Score:** ~0.64
-- **Model Registry:** O modelo aprovado recebe a tag `@champion`, permitindo que a API de inferência o carregue dinamicamente na inicialização.
-
----
-
 ## Model Card
 
-| Item | Especificação |
-| --- | --- |
-| **Nome do Modelo** | `purchase-intention-classifier` |
-| **Tipo de Modelo** | Random Forest Classifier com pré-processamento acoplado (`ColumnTransformer`) |
-| **Objetivo** | Previsão em tempo real da probabilidade de compra (`Revenue=True`) de uma sessão de e-commerce. |
-| **Entradas** | 17 variáveis de sessão (páginas visitadas, duração, taxas de rejeição/saída, PageValues, mês, SO, navegador, região, tipo de tráfego, tipo de visitante e fim de semana). |
-| **Saída** | `purchase_probability` (0.0 a 1.0) e `purchase_prediction` (True/False dado o threshold 0.5). |
-| **Tratamento de Desbalanceamento** | `class_weight='balanced'` aplicado para priorizar recall da classe minoritária compradora (~15.5% da base). |
-| **Limitações** | Desempenho condicionado à integridade dos eventos de navegação; novos valores em variáveis categóricas são ignorados de forma segura (`handle_unknown='ignore'`). |
+| Item                                 | Especificação |
+| ---                                  | --- |
+| **Nome do Modelo**                   | `purchase-intention-classifier` |
+| **Tipo de Modelo**                   | Random Forest Classifier com pré-processamento acoplado (`ColumnTransformer`) |
+| **Objetivo**                         | Previsão em tempo real da probabilidade de compra (`Revenue=True`) de uma sessão de e-commerce.                            |
+| **Entradas**                         | 17 variáveis de sessão (páginas visitadas, duração, taxas de rejeição/saída, PageValues, mês, SO, navegador, região, tipo de tráfego, tipo de visitante e fim de semana). |
+| **Saída**                            | `purchase_probability` (0.0 a 1.0) e `purchase_prediction` (True/False dado o threshold 0.5).                                  |
+| **Tratamento de Desbalanceamento**   | `class_weight='balanced'` aplicado para priorizar recall da classe minoritária compradora (~15.5% da base).           |
+| **Limitações**                       | Desempenho condicionado à integridade dos eventos de navegação; novos valores em variáveis categóricas são ignorados de forma segura (`handle_unknown='ignore'`). |
 
 ## Docker
 
