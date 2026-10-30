@@ -1,0 +1,48 @@
+name: fiaptc-mlops
+
+services:
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v3.17.1
+    container_name: mlflow
+    restart: always
+    command: >
+      mlflow server
+      --host 0.0.0.0
+      --port 5000
+      --backend-store-uri sqlite:////mlflow/mlflow.db
+      --artifacts-destination /mlflow/artifacts
+      --allowed-hosts 127.0.0.1:5000,localhost:5000,mlflow:5000
+    volumes:
+      - /root/services/mlflow/data:/mlflow
+    ports:
+      - "127.0.0.1:5000:5000"
+    networks: 
+     - stack
+  predict-api:
+    build:
+      context: /root/projects/fiaptc-purchase-intention
+      dockerfile: Dockerfile
+    image: fiaptc-purchase-intention-api
+    container_name: purchase_intention_api
+    restart: always
+    environment:
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+      - MODEL_NAME=purchase-intention-classifier
+      - MODEL_ALIAS=champion
+      - PREDICTION_THRESHOLD=0.5
+      - TZ=America/Sao_Paulo
+    depends_on:
+      - mlflow
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.pintent.rule=Host(`predict.inteligerar.com.br`)"
+      - "traefik.http.routers.pintent.entrypoints=websecure"
+      - "traefik.http.routers.pintent.tls.certresolver=myresolver"
+      - "traefik.http.services.pintent.loadbalancer.server.port=8075"
+    networks:
+      - stack
+networks:
+  stack:
+    external: true
+    name: services_default
+

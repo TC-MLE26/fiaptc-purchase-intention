@@ -82,6 +82,7 @@ class ModelTrainer:
                     sk_model=pipeline,
                     artifact_path="model",
                     input_example=x_train.head(2),
+                    serialization_format="pickle",
                 )
                 logger.info(
                     "Successfully trained and logged model to MLflow (run_id: %s)",
