@@ -2,12 +2,16 @@
 
 import logging
 import os
+import sys
+from pathlib import Path
 
 import mlflow
 from mlflow import MlflowClient
 
 from src.core.settings import settings
 from src.pipeline.config_loader import load_params
+from src.pipeline.console import configure_utf8_console
+from src.pipeline.run_id import LOCAL_RUN_ID, read_run_id, run_id_path
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
@@ -27,30 +31,13 @@ class ModelRegistrar:
         self.client = MlflowClient(tracking_uri=self.tracking_uri)
         mlflow.set_tracking_uri(self.tracking_uri)
 
-    def get_latest_run_id(self, experiment_name: str) -> str:
-        """Find the latest successful run ID for an experiment.
+    def ensure_reachable(self) -> None:
+        """Probe the MLflow server with a cheap read.
 
-        Args:
-            experiment_name: Name of the MLflow experiment.
-
-        Returns:
-            Latest run ID string.
+        Raises:
+            Exception: Whatever the client raises when the server cannot be used.
         """
-        experiment = self.client.get_experiment_by_name(experiment_name)
-        if not experiment:
-            raise ValueError(f"Experiment '{experiment_name}' not found.")
-
-        runs = self.client.search_runs(
-            experiment_ids=[experiment.experiment_id],
-            order_by=["start_time DESC"],
-            max_results=1,
-        )
-        if not runs:
-            raise ValueError(f"No runs found in experiment '{experiment_name}'.")
-
-        run_id = runs[0].info.run_id
-        logger.info("Found latest run %s in experiment %s", run_id, experiment_name)
-        return run_id
+        self.client.search_experiments(max_results=1)
 
     def register_and_promote(
         self,
@@ -87,30 +74,75 @@ class ModelRegistrar:
         return version_str
 
 
-def main() -> None:
-    """Entry point for model registration stage."""
-    params = load_params()
-    train_cfg = params.get("train", {})
+def require_train_run_id(run_id_file: Path) -> str:
+    """Return the run ID of the train stage, which holds the model.
 
-    tracking_uri = os.environ.get("MLFLOW_TRACKING_URI", settings.MLFLOW_TRACKING_URI)
-    experiment_name = str(
-        train_cfg.get("experiment_name", "purchase-intention-challenge")
-    )
-    model_name = str(train_cfg.get("model_name", "purchase-intention-classifier"))
-    model_alias = str(train_cfg.get("model_alias", "champion"))
+    Args:
+        run_id_file: File written by the train stage.
 
-    try:
-        registrar = ModelRegistrar(tracking_uri=tracking_uri)
-        run_id = registrar.get_latest_run_id(experiment_name)
-        registrar.register_and_promote(
-            run_id, model_name=model_name, model_alias=model_alias
+    Returns:
+        MLflow run ID.
+
+    Raises:
+        ValueError: If the train stage did not log a run to MLflow.
+    """
+    run_id = read_run_id(run_id_file)
+    if run_id is None or run_id == LOCAL_RUN_ID:
+        raise ValueError(
+            f"The train stage did not log a run to MLflow ({run_id_file}). "
+            "Re-run the pipeline with MLflow up: dvc repro --force"
         )
+    return run_id
+
+
+def run_registration(
+    registrar: ModelRegistrar, run_id_file: Path, model_name: str, model_alias: str
+) -> int:
+    """Register and promote the train run, telling offline from real failures.
+
+    Args:
+        registrar: Registrar bound to the MLflow server.
+        run_id_file: File written by the train stage.
+        model_name: Target registered model name.
+        model_alias: Alias to assign (e.g. champion).
+
+    Returns:
+        Process exit code: 0 when registered or when MLflow is unreachable
+        (offline runs are allowed), 1 when MLflow is reachable but the
+        registration failed.
+    """
+    try:
+        registrar.ensure_reachable()
     except Exception as e:
         logger.warning(
-            "MLflow server not reached (%s). Model saved at models/model.pkl. "
-            "Start MLflow ('mlflow ui') to register in the Model Registry.",
+            "MLflow unreachable at %s (%s). Model saved at models/model.pkl; "
+            "registration skipped. Start MLflow ('mlflow ui') and re-run "
+            "'dvc repro --force' to register it.",
+            registrar.tracking_uri,
             e,
         )
+        return 0
+    try:
+        run_id = require_train_run_id(run_id_file)
+        registrar.register_and_promote(run_id, model_name, model_alias)
+    except Exception as e:
+        logger.error("Registration FAILED with MLflow reachable: %s", e)
+        return 1
+    return 0
+
+
+def main() -> None:
+    """Entry point for model registration stage."""
+    configure_utf8_console()
+    train_cfg = load_params().get("train", {})
+    tracking_uri = os.environ.get("MLFLOW_TRACKING_URI", settings.MLFLOW_TRACKING_URI)
+    exit_code = run_registration(
+        ModelRegistrar(tracking_uri=tracking_uri),
+        run_id_path(train_cfg),
+        model_name=str(train_cfg.get("model_name", "purchase-intention-classifier")),
+        model_alias=str(train_cfg.get("model_alias", "champion")),
+    )
+    sys.exit(exit_code)
 
 
 if __name__ == "__main__":

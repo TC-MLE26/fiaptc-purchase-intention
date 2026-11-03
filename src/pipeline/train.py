@@ -13,7 +13,9 @@ from sklearn.pipeline import Pipeline
 
 from src.core.settings import settings
 from src.pipeline.config_loader import load_params
+from src.pipeline.console import configure_utf8_console
 from src.pipeline.model_pipeline import build_model_pipeline
+from src.pipeline.run_id import LOCAL_RUN_ID, run_id_path, write_run_id
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
@@ -56,7 +58,7 @@ class ModelTrainer:
         model_params: dict[str, Any],
         output_model_path: str | Path,
     ) -> str:
-        """Fit pipeline and log parameters, artifacts, and model to MLflow.
+        """Fit pipeline, save it locally and log it to MLflow.
 
         Args:
             x_train: Training features DataFrame.
@@ -65,33 +67,48 @@ class ModelTrainer:
             output_model_path: Local filesystem destination for model artifact.
 
         Returns:
-            Active MLflow run ID.
+            MLflow run ID, or ``LOCAL_RUN_ID`` if MLflow could not be used.
         """
         pipeline = build_model_pipeline(**model_params)
         pipeline.fit(x_train, y_train)
         self.save_local_artifact(pipeline, output_model_path)
 
         try:
-            mlflow.set_tracking_uri(self.tracking_uri)
-            mlflow.set_experiment(self.experiment_name)
-            with mlflow.start_run() as run:
-                run_id = run.info.run_id
-                logger.info("Started MLflow run %s", run_id)
-                mlflow.log_params(model_params)
-                mlflow.sklearn.log_model(
-                    sk_model=pipeline,
-                    artifact_path="model",
-                    input_example=x_train.head(2),
-                    serialization_format="pickle",
-                )
-                logger.info(
-                    "Successfully trained and logged model to MLflow (run_id: %s)",
-                    run_id,
-                )
-                return run_id
+            return self.log_to_mlflow(pipeline, x_train, model_params)
         except Exception as e:
-            logger.warning("MLflow server not reached (%s). Model saved locally.", e)
-            return "local_run"
+            logger.warning("Could not log to MLflow (%s). Model saved locally.", e)
+            return LOCAL_RUN_ID
+
+    def log_to_mlflow(
+        self,
+        pipeline: Pipeline,
+        x_train: pd.DataFrame,
+        model_params: dict[str, Any],
+    ) -> str:
+        """Open an MLflow run and log the parameters and the fitted model.
+
+        Args:
+            pipeline: Fitted pipeline.
+            x_train: Training features, used as the model input example.
+            model_params: Dictionary with hyperparameters.
+
+        Returns:
+            ID of the run that holds the model.
+        """
+        mlflow.set_tracking_uri(self.tracking_uri)
+        mlflow.set_experiment(self.experiment_name)
+        with mlflow.start_run() as run:
+            run_id = run.info.run_id
+            logger.info("Started MLflow run %s", run_id)
+            mlflow.log_params(model_params)
+            mlflow.sklearn.log_model(
+                sk_model=pipeline,
+                artifact_path="model",
+                input_example=x_train.head(2),
+                serialization_format="pickle",
+            )
+            logger.info("Logged model to MLflow (run_id: %s)", run_id)
+            return run_id
 
     def save_local_artifact(self, model: Pipeline, output_path: str | Path) -> None:
         """Save model pipeline to local disk via pickle.
@@ -107,12 +124,29 @@ class ModelTrainer:
         logger.info("Saved local model artifact to %s", path)
 
 
+def build_model_params(params: dict[str, Any]) -> dict[str, Any]:
+    """Build the model hyperparameters from the loaded params.yaml.
+
+    Args:
+        params: Full content of params.yaml.
+
+    Returns:
+        Keyword arguments for ``build_model_pipeline``.
+    """
+    train_cfg = params.get("train", {})
+    return {
+        "seed": int(params.get("seed", 42)),
+        "n_estimators": int(train_cfg.get("n_estimators", 150)),
+        "max_depth": int(train_cfg.get("max_depth", 8)),
+        "min_samples_split": int(train_cfg.get("min_samples_split", 5)),
+    }
+
+
 def main() -> None:
     """Entry point for model training stage."""
+    configure_utf8_console()
     params = load_params()
-    seed = int(params.get("seed", 42))
     train_cfg = params.get("train", {})
-
     tracking_uri = os.environ.get("MLFLOW_TRACKING_URI", settings.MLFLOW_TRACKING_URI)
     experiment_name = str(
         train_cfg.get("experiment_name", "purchase-intention-challenge")
@@ -121,15 +155,11 @@ def main() -> None:
     trainer = ModelTrainer(tracking_uri=tracking_uri, experiment_name=experiment_name)
     train_file = Path(train_cfg.get("processed_dir", "data/processed")) / "train.csv"
     x_train, y_train = trainer.load_dataset(train_file, target_col="Revenue")
-
-    model_params = {
-        "seed": seed,
-        "n_estimators": int(train_cfg.get("n_estimators", 150)),
-        "max_depth": int(train_cfg.get("max_depth", 8)),
-        "min_samples_split": int(train_cfg.get("min_samples_split", 5)),
-    }
     output_model = Path(train_cfg.get("model_dir", "models")) / "model.pkl"
-    trainer.train_and_log(x_train, y_train, model_params, output_model)
+    run_id = trainer.train_and_log(
+        x_train, y_train, build_model_params(params), output_model
+    )
+    write_run_id(run_id, run_id_path(train_cfg))
 
 
 if __name__ == "__main__":
