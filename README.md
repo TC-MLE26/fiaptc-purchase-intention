@@ -20,7 +20,7 @@ Este repositório cobre a análise exploratória, o pipeline de dados (via DVC),
 
 - **Repositório GitHub:** https://github.com/TC-MLE26/fiaptc-purchase-intention
 - **API pública (Swagger):** https://predict.inteligerar.com.br/docs
-- **Vídeo STAR (5 minutos):** LINK_DO_VIDEO
+- **Vídeo STAR (5 minutos):** https://drive.google.com/file/d/1WAA242yU0wibOge4_bJDAY2omgrRycYc/view?usp=sharing
 
 ---
 
