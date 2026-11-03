@@ -9,8 +9,8 @@ stages:
       size: 1072063
     - path: src/pipeline/data_preparation.py
       hash: md5
-      md5: eceaac4b95934c529c16b59f2ba7dd8d
-      size: 3135
+      md5: 81790ab5ae29aa3348795b568acfd29d
+      size: 3393
     params:
       configs/params.yaml:
         prepare:
@@ -37,12 +37,12 @@ stages:
       size: 935403
     - path: src/pipeline/model_pipeline.py
       hash: md5
-      md5: 0eaa3a2531bc7a74ca0932cee4dc040b
-      size: 2510
+      md5: 84fde26f0aaaa9dd88b4df321e4315b3
+      size: 2598
     - path: src/pipeline/train.py
       hash: md5
-      md5: 9b4365e745287f6fdd38ea73b41928dc
-      size: 4539
+      md5: 507c7d3f6bf50510f6fecc55d2f83993
+      size: 5823
     params:
       configs/params.yaml:
         seed: 42
@@ -56,6 +56,10 @@ stages:
           max_depth: 8
           min_samples_split: 5
     outs:
+    - path: models/mlflow_run_id.txt
+      hash: md5
+      md5: 5486319d644847a46b400a460adf4b7c
+      size: 32
     - path: models/model.pkl
       hash: md5
       md5: 4c92a74edfbf4bb0ee8fb771bdb0287b
@@ -67,14 +71,18 @@ stages:
       hash: md5
       md5: 859bfc849b9b5f9a7dc98b9b5891c6bf
       size: 234115
+    - path: models/mlflow_run_id.txt
+      hash: md5
+      md5: 5486319d644847a46b400a460adf4b7c
+      size: 32
     - path: models/model.pkl
       hash: md5
       md5: 4c92a74edfbf4bb0ee8fb771bdb0287b
       size: 3034340
     - path: src/pipeline/evaluate.py
       hash: md5
-      md5: a4dde4e3b4028258e2e22fca4b1a81d4
-      size: 4668
+      md5: 6ff17efc04165af644208375698434a1
+      size: 6351
     params:
       configs/params.yaml:
         evaluate:
@@ -89,14 +97,18 @@ stages:
   register:
     cmd: python -m src.pipeline.register
     deps:
+    - path: models/mlflow_run_id.txt
+      hash: md5
+      md5: 5486319d644847a46b400a460adf4b7c
+      size: 32
     - path: models/model.pkl
       hash: md5
       md5: 4c92a74edfbf4bb0ee8fb771bdb0287b
       size: 3034340
     - path: src/pipeline/register.py
       hash: md5
-      md5: d29dc818ee5874e0ac3613f18d0fa013
-      size: 3753
+      md5: 6f734cb62861ec5db7cf8cb51bed6c5b
+      size: 4782
     params:
       configs/params.yaml:
         train.model_alias: champion

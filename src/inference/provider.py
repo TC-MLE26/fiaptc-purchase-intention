@@ -29,6 +29,7 @@ class ModelProvider:
         threshold: float,
         clock: Callable[[], float] = time.monotonic,
     ) -> None:
+        """Store the registry coordinates and prepare an empty, unloaded state."""
         self._model_name = model_name
         self._model_alias = model_alias
         self._tracking_uri = tracking_uri

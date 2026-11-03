@@ -1,7 +1,5 @@
 """Unit tests for the training and data pipeline modules."""
 
-from unittest.mock import MagicMock
-
 import numpy as np
 import pandas as pd
 import pytest
@@ -10,7 +8,6 @@ from src.pipeline.config_loader import load_params
 from src.pipeline.data_preparation import DataPreparer
 from src.pipeline.evaluate import ModelEvaluator
 from src.pipeline.model_pipeline import build_model_pipeline
-from src.pipeline.register import ModelRegistrar
 
 
 @pytest.fixture()
@@ -93,19 +90,3 @@ def test_model_evaluator_metrics(sample_dataset: pd.DataFrame) -> None:
     assert "recall" in metrics
     assert "f1" in metrics
     assert "roc_auc" in metrics
-
-
-def test_model_registrar_get_latest_run(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Test ModelRegistrar finds latest run."""
-    mock_client = MagicMock()
-    mock_exp = MagicMock(experiment_id="exp_123")
-    mock_run = MagicMock(info=MagicMock(run_id="run_456"))
-
-    mock_client.get_experiment_by_name.return_value = mock_exp
-    mock_client.search_runs.return_value = [mock_run]
-
-    registrar = ModelRegistrar(tracking_uri="http://localhost:5000")
-    registrar.client = mock_client
-
-    run_id = registrar.get_latest_run_id("test-experiment")
-    assert run_id == "run_456"

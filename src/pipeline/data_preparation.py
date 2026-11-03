@@ -7,6 +7,7 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 
 from src.pipeline.config_loader import load_params
+from src.pipeline.console import configure_utf8_console
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
@@ -86,6 +87,7 @@ class DataPreparer:
 
 def main() -> None:
     """Entry point for data preparation stage."""
+    configure_utf8_console()
     params = load_params()
     seed = int(params.get("seed", 42))
     prep_cfg = params.get("prepare", {})

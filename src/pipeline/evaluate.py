@@ -5,6 +5,7 @@ import logging
 import os
 import pickle
 from pathlib import Path
+from typing import Any
 
 import mlflow
 import pandas as pd
@@ -19,6 +20,8 @@ from sklearn.pipeline import Pipeline
 
 from src.core.settings import settings
 from src.pipeline.config_loader import load_params
+from src.pipeline.console import configure_utf8_console
+from src.pipeline.run_id import LOCAL_RUN_ID, read_run_id, run_id_path
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
@@ -106,42 +109,79 @@ class ModelEvaluator:
             json.dump(metrics, f, indent=2)
         logger.info("Saved metrics to %s", path)
 
-    def log_metrics_to_mlflow(self, metrics: dict[str, float]) -> None:
-        """Log calculated metrics to active or new MLflow run."""
+    def log_metrics_to_mlflow(self, metrics: dict[str, float], run_id: str) -> None:
+        """Log the metrics in the MLflow run created by the train stage.
+
+        Args:
+            metrics: Computed metrics dictionary.
+            run_id: ID of the train run, so params, metrics and model share it.
+        """
         try:
             mlflow.set_tracking_uri(self.tracking_uri)
-            mlflow.set_experiment(self.experiment_name)
-            with mlflow.start_run(nested=True):
+            with mlflow.start_run(run_id=run_id):
                 mlflow.log_metrics(metrics)
+            logger.info("Logged metrics to MLflow run %s", run_id)
         except Exception as e:
             logger.warning("Could not log metrics to MLflow: %s", e)
 
 
-def main() -> None:
-    """Entry point for model evaluation stage."""
-    params = load_params()
-    eval_cfg = params.get("evaluate", {})
-    train_cfg = params.get("train", {})
+def log_metrics_if_possible(
+    evaluator: ModelEvaluator, metrics: dict[str, float], run_id_file: Path
+) -> None:
+    """Log metrics to MLflow unless the train stage did not reach MLflow.
 
-    tracking_uri = os.environ.get("MLFLOW_TRACKING_URI", settings.MLFLOW_TRACKING_URI)
-    experiment_name = str(
-        train_cfg.get("experiment_name", "purchase-intention-challenge")
-    )
+    Args:
+        evaluator: Evaluator holding the MLflow settings.
+        metrics: Computed metrics dictionary.
+        run_id_file: File with the run ID written by the train stage.
+    """
+    run_id = read_run_id(run_id_file)
+    if run_id is None or run_id == LOCAL_RUN_ID:
+        logger.warning("No MLflow run from the train stage; metrics not logged.")
+        return
+    evaluator.log_metrics_to_mlflow(metrics, run_id)
 
-    evaluator = ModelEvaluator(
-        tracking_uri=tracking_uri, experiment_name=experiment_name
-    )
+
+def evaluate_model(
+    evaluator: ModelEvaluator, eval_cfg: dict[str, Any]
+) -> dict[str, float]:
+    """Load the model and test data, compute metrics and save the report.
+
+    Args:
+        evaluator: Evaluator to run.
+        eval_cfg: The ``evaluate`` section of params.yaml.
+
+    Returns:
+        Computed metrics dictionary.
+    """
     model = evaluator.load_model(eval_cfg.get("model_path", "models/model.pkl"))
     x_test, y_test = evaluator.load_test_data(
         eval_cfg.get("test_data_path", "data/processed/test.csv"),
         target_col="Revenue",
     )
-
     metrics = evaluator.calculate_metrics(model, x_test, y_test)
     evaluator.save_metrics(
         metrics, eval_cfg.get("metrics_path", "reports/metrics.json")
     )
-    evaluator.log_metrics_to_mlflow(metrics)
+    return metrics
+
+
+def main() -> None:
+    """Entry point for model evaluation stage."""
+    configure_utf8_console()
+    params = load_params()
+    eval_cfg = params.get("evaluate", {})
+    train_cfg = params.get("train", {})
+    evaluator = ModelEvaluator(
+        tracking_uri=os.environ.get(
+            "MLFLOW_TRACKING_URI", settings.MLFLOW_TRACKING_URI
+        ),
+        experiment_name=str(
+            train_cfg.get("experiment_name", "purchase-intention-challenge")
+        ),
+    )
+    metrics = evaluate_model(evaluator, eval_cfg)
+    log_metrics_if_possible(evaluator, metrics, run_id_path(train_cfg))
 
 
 if __name__ == "__main__":

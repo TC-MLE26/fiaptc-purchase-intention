@@ -24,12 +24,14 @@ stages:
           - train
     outs:
       - models/model.pkl
+      - models/mlflow_run_id.txt
 
   evaluate:
     cmd: python -m src.pipeline.evaluate
     deps:
       - data/processed/test.csv
       - models/model.pkl
+      - models/mlflow_run_id.txt
       - src/pipeline/evaluate.py
     params:
       - configs/params.yaml:
@@ -42,6 +44,7 @@ stages:
     cmd: python -m src.pipeline.register
     deps:
       - models/model.pkl
+      - models/mlflow_run_id.txt
       - src/pipeline/register.py
     params:
       - configs/params.yaml:
