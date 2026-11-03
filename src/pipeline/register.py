@@ -60,18 +60,26 @@ class ModelRegistrar:
         model_version = mlflow.register_model(model_uri=model_uri, name=model_name)
 
         version_str = str(model_version.version)
+        self._assign_alias(model_name, model_alias, version_str)
+        return version_str
+
+    def _assign_alias(self, model_name: str, model_alias: str, version: str) -> None:
+        """Point an alias of a registered model to a version and log it.
+
+        Args:
+            model_name: Registered model name.
+            model_alias: Alias to assign (e.g. champion).
+            version: Model version that receives the alias.
+        """
         self.client.set_registered_model_alias(
-            name=model_name,
-            alias=model_alias,
-            version=version_str,
+            name=model_name, alias=model_alias, version=version
         )
         logger.info(
             "Assigned alias '@%s' to version %s of '%s'",
             model_alias,
-            version_str,
+            version,
             model_name,
         )
-        return version_str
 
 
 def require_train_run_id(run_id_file: Path) -> str:
