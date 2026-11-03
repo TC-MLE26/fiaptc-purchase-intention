@@ -6,6 +6,20 @@ Tech Challenge da Fase 2 da pós-graduação em ML Engineering (FIAP). O projeto
 
 Este repositório cobre a análise exploratória, o pipeline de dados (via DVC), o treinamento e rastreamento (via MLflow) e a API de inferência (FastAPI).
 
+## Integrantes
+
+- Alvaro Pereira
+- Grazielle Azevedo
+- Gustavo Scherer
+- Victor Medrado
+- Victor Eugênio
+
+## Entregáveis
+
+- **Repositório GitHub:** https://github.com/TC-MLE26/fiaptc-purchase-intention
+- **API pública (Swagger):** https://predict.inteligerar.com.br/docs
+- **Vídeo STAR (5 minutos):** LINK_DO_VIDEO
+
 ---
 
 ## Estrutura do Repositório
