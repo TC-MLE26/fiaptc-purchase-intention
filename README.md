@@ -78,8 +78,9 @@ poetry run dvc repro
 
 ```bash
 poetry run dvc metrics show
-Métricas atuais: ROC-AUC ~0.92, Recall ~81.4%, Acurácia ~85.8%.
 ```
+
+Métricas atuais: ROC-AUC ~0.92, Recall ~81.4%, Acurácia ~85.8%.
 ### Treinamento e MLflow Tracking
 O treinamento utiliza o `scikit-learn` encapsulado em um `sklearn.pipeline.Pipeline` completo (com `StandardScaler` para variáveis contínuas e `OneHotEncoder` para variáveis categóricas).
 
@@ -89,7 +90,7 @@ Para visualizar os experimentos, inicie a interface do MLflow em um terminal sep
 poetry run mlflow ui --port 5000
 ```
 
-Acesse *http://localhost:5000.* O modelo aprovado recebe a tag `@champion` no Model Registry.
+Acesse *http://localhost:5000.* O modelo aprovado recebe o alias `@champion` no Model Registry.
 
 Ao executar o pipeline (`dvc repro` ou `python -m src.pipeline.train`), os experimentos são logados no experimento `purchase-intention-challenge`:
 - **Parâmetros logados:** `n_estimators`, `max_depth`, `min_samples_split`, `seed`.
@@ -98,7 +99,7 @@ Ao executar o pipeline (`dvc repro` ou `python -m src.pipeline.train`), os exper
   - **Recall:** ~81.4%
   - **Acurácia:** ~85.8%
   - **F1-Score:** ~0.64
-- **Model Registry:** O modelo aprovado recebe a tag `@champion`, permitindo que a API de inferência o carregue dinamicamente na inicialização.
+- **Model Registry:** O modelo aprovado recebe o alias `@champion`, permitindo que a API de inferência o carregue dinamicamente na inicialização.
 
 ---
 
@@ -178,7 +179,7 @@ depois da API.
 1. Erro `503 Service Unavailable` no `/predict`
 **Sintoma:** A API responde com erro dizendo que o modelo está indisponível.
 **Solução:** O MLflow provavelmente não estava rodando durante a etapa de registro do modelo. 
-Inicie o MLflow (`poetry run mlflow ui --port 5000`) e rode novamente o pipeline (`poetry run dvc repro`) ou apenas a etapa de registro (`poetry run python -m src.pipeline.register`).
+Inicie o MLflow (`poetry run mlflow ui --port 5000`) e rode novamente o pipeline com `poetry run dvc repro --force`. A etapa de registro precisa do run do treino no MLflow (`models/mlflow_run_id.txt`); com o MLflow no ar, ela falha com código de saída diferente de zero em vez de ser ignorada.
 
 2. Erro `No remote provided and no default remote set` ao rodar `dvc pull`
 **Sintoma:** O DVC não consegue baixar os dados processados.
@@ -271,4 +272,17 @@ docker run -d --rm -p 8075:8075 --env-file .env \
   --name pi-api fiaptc-purchase-intention-api
 ```
 
+O `mlflow ui --port 5000` escuta apenas em `127.0.0.1` (o container não o alcança) e recusa o host `host.docker.internal` com `403`. Suba o MLflow do host assim (rode o `dvc repro` com ele de pé para registrar o `@champion`):
+
+```bash
+poetry run mlflow ui --host 0.0.0.0 --port 5000 \
+  --allowed-hosts "localhost:5000,127.0.0.1:5000,host.docker.internal:5000"
+```
+
+`--host 0.0.0.0` expõe o MLflow na rede local; use apenas em rede confiável.
+
 Em Linux, adicione `--add-host=host.docker.internal:host-gateway`. Sem MLflow acessível a API sobe, `/health` retorna `model_loaded: false` e `/predict` responde 503.
+
+### Deploy em produção
+
+A API pública roda em **https://predict.inteligerar.com.br**. O deploy de produção (MLflow Server + API atrás do Traefik) está descrito em [`deploy/docker-compose.yml`](deploy/docker-compose.yml).
