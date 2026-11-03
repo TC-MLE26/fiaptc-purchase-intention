@@ -2,9 +2,25 @@
 
 Tech Challenge da Fase 2 da pós-graduação em ML Engineering (FIAP). O projeto prevê a propensão de compra de um usuário de e-commerce a partir do comportamento de navegação, para que o time de negócio consiga priorizar ações (ofertas, remarketing) durante a sessão, e não só depois dela.
 
-É um problema de classificação binária com dados tabulares, onde cada linha representa uma sessão de navegação. O dataset é o [Online Shoppers Purchasing Intention](https://archive.ics.uci.edu/dataset/468/online+shoppers+purchasing+intention+dataset) (UCI), com 17 features e o alvo `Revenue`. 
+É um problema de classificação binária com dados tabulares, onde cada linha representa uma sessão de navegação. O dataset é o [Online Shoppers Purchasing Intention](https://archive.ics.uci.edu/dataset/468/online+shoppers+purchasing+intention+dataset) (UCI), com 17 features e o alvo `Revenue`.
 
 Este repositório cobre a análise exploratória, o pipeline de dados (via DVC), o treinamento e rastreamento (via MLflow) e a API de inferência (FastAPI).
+
+---
+
+## Integrantes
+
+- Alvaro Pereira
+- Grazielle Azevedo
+- Gustavo Scherer
+- Victor Medrado
+- Victor Eugênio
+
+## Entregáveis
+
+- **Repositório GitHub:** https://github.com/TC-MLE26/fiaptc-purchase-intention
+- **API pública (Swagger):** https://predict.inteligerar.com.br/docs
+- **Vídeo STAR (5 minutos):** LINK_DO_VIDEO
 
 ---
 
@@ -32,6 +48,7 @@ O projeto usa Python 3.12 e [Poetry](https://python-poetry.org/) para gerenciar 
 ambiente e as dependências (produção e desenvolvimento separadas):
 
 # 1. Instalação de dependências:
+Instale o Poetry (por exemplo, `pipx install poetry`; o Dockerfile usa a versão 2.5.1, com `pipx install poetry==2.5.1` você instala a mesma) e depois as dependências:
 ```bash
 poetry install
 ```
@@ -66,15 +83,24 @@ cp .env.example .env
 O ciclo de vida dos dados e artefatos de modelo é orquestrado e versionado via [DVC](https://dvc.org/), garantindo reprodutibilidade ponta a ponta e separação rígida entre código (Git) e dados/binários (DVC).
 
 # 1. Download dos Dados Brutos:
-Baixe o dataset *online_shoppers_intention.csv* diretamente do *UCI Repository* e coloque-o na pasta: **data/raw/online_shoppers_intention.csv.**
+Baixe o [zip direto do UCI Repository](https://archive.ics.uci.edu/static/public/468/online+shoppers+purchasing+intention+dataset.zip), extraia o *online_shoppers_intention.csv* e coloque-o em: **data/raw/online_shoppers_intention.csv.** O arquivo bate com o hash (MD5) versionado no `.dvc`.
 
-# 2. Execução do Pipeline:
+# 2. Subir o MLflow:
+Em um terminal separado, deixe o MLflow no ar antes do pipeline:
+
+```bash
+poetry run mlflow ui --port 5000
+```
+
+Sem o MLflow no ar, o estágio de registro apenas avisa e pula o registro, e o modelo não recebe o alias `@champion`.
+
+# 3. Execução do Pipeline:
 Para rodar os estágios de preparação, treino, avaliação e registro:
 
 ```bash
 poetry run dvc repro
 ```
-# 3. Visualização de Métricas:
+# 4. Visualização de Métricas:
 
 ```bash
 poetry run dvc metrics show
@@ -84,13 +110,7 @@ Métricas atuais: ROC-AUC ~0.92, Recall ~81.4%, Acurácia ~85.8%.
 ### Treinamento e MLflow Tracking
 O treinamento utiliza o `scikit-learn` encapsulado em um `sklearn.pipeline.Pipeline` completo (com `StandardScaler` para variáveis contínuas e `OneHotEncoder` para variáveis categóricas).
 
-Para visualizar os experimentos, inicie a interface do MLflow em um terminal separado:
-
-```bash
-poetry run mlflow ui --port 5000
-```
-
-Acesse *http://localhost:5000.* O modelo aprovado recebe o alias `@champion` no Model Registry.
+Para visualizar os experimentos, acesse a interface do MLflow iniciada no passo 2: *http://localhost:5000.* O modelo aprovado recebe o alias `@champion` no Model Registry.
 
 Ao executar o pipeline (`dvc repro` ou `python -m src.pipeline.train`), os experimentos são logados no experimento `purchase-intention-challenge`:
 - **Parâmetros logados:** `n_estimators`, `max_depth`, `min_samples_split`, `seed`.

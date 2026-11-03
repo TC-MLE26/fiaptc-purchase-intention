@@ -58,7 +58,7 @@ stages:
     outs:
     - path: models/mlflow_run_id.txt
       hash: md5
-      md5: 5486319d644847a46b400a460adf4b7c
+      md5: 27ac53893a7902465f337bf06ef8bd35
       size: 32
     - path: models/model.pkl
       hash: md5
@@ -73,7 +73,7 @@ stages:
       size: 234115
     - path: models/mlflow_run_id.txt
       hash: md5
-      md5: 5486319d644847a46b400a460adf4b7c
+      md5: 27ac53893a7902465f337bf06ef8bd35
       size: 32
     - path: models/model.pkl
       hash: md5
@@ -99,7 +99,7 @@ stages:
     deps:
     - path: models/mlflow_run_id.txt
       hash: md5
-      md5: 5486319d644847a46b400a460adf4b7c
+      md5: 27ac53893a7902465f337bf06ef8bd35
       size: 32
     - path: models/model.pkl
       hash: md5
@@ -107,8 +107,8 @@ stages:
       size: 3034340
     - path: src/pipeline/register.py
       hash: md5
-      md5: 6f734cb62861ec5db7cf8cb51bed6c5b
-      size: 4782
+      md5: 0d617140e128f71133b5f3696b6c3a9a
+      size: 5166
     params:
       configs/params.yaml:
         train.model_alias: champion
