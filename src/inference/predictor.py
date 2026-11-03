@@ -19,6 +19,7 @@ class PurchasePredictor:
         model_name: str,
         model_version: str,
     ) -> None:
+        """Store the estimator, the decision threshold and the model identity."""
         self._estimator = estimator
         self._threshold = threshold
         self._model_name = model_name
